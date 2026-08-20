@@ -3,6 +3,7 @@ export class WakeWordEngine {
   private isListening = false;
   private wakePhrase = 'hey sathi';
   private onWakeCallback: (() => void) | null = null;
+  private lastTriggerTime = 0;
 
   constructor(wakePhrase = 'hey sathi') {
     this.wakePhrase = wakePhrase.toLowerCase();
@@ -22,20 +23,36 @@ export class WakeWordEngine {
       this.recognition.lang = 'en-US';
 
       this.recognition.onresult = (event: any) => {
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript.toLowerCase();
+        const now = Date.now();
+        // Cooldown of 3 seconds to prevent duplicate rapid triggers
+        if (now - this.lastTriggerTime < 3000) return;
 
-          if (
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const rawTranscript = event.results[i][0].transcript || '';
+          const transcript = rawTranscript.toLowerCase().trim();
+
+          console.log('[WakeWordEngine] Background audio transcript:', transcript);
+
+          const isMatch =
             transcript.includes(this.wakePhrase) ||
             transcript.includes('hey sathi') ||
+            transcript.includes('hi sathi') ||
+            transcript.includes('hey साथी') ||
+            transcript.includes('हे साथी') ||
+            transcript.includes('साथी') ||
             transcript.includes('sathi ai') ||
             transcript.includes('sathi') ||
+            transcript.includes('saathi') ||
+            transcript.includes('sathy') ||
+            transcript.includes('satty') ||
+            transcript.includes('shathi') ||
             transcript.includes('sathi suna') ||
             transcript.includes('sathi सुन') ||
-            transcript.includes('साथी सुन') ||
-            transcript.includes('sathi, सुन')
-          ) {
-            console.log('[WakeWordEngine] Trigger phrase detected:', transcript);
+            transcript.includes('साथी सुन');
+
+          if (isMatch) {
+            console.log('[WakeWordEngine] SUCCESS! Trigger phrase detected:', transcript);
+            this.lastTriggerTime = now;
             if (this.onWakeCallback) {
               this.onWakeCallback();
             }
@@ -45,13 +62,17 @@ export class WakeWordEngine {
       };
 
       this.recognition.onend = () => {
-        // Automatically restart continuous background listening if still enabled
+        // Automatically restart continuous background listening with 200ms delay for browser stability
         if (this.isListening) {
-          try {
-            this.recognition.start();
-          } catch {
-            // ignore restart collision
-          }
+          setTimeout(() => {
+            if (this.isListening && this.recognition) {
+              try {
+                this.recognition.start();
+              } catch (e) {
+                // ignore restart collision
+              }
+            }
+          }, 200);
         }
       };
 
@@ -96,10 +117,6 @@ export class WakeWordEngine {
         // ignore
       }
     }
-  }
-
-  public isActive(): boolean {
-    return this.isListening;
   }
 }
 

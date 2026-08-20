@@ -89,13 +89,28 @@ export const App: React.FC = () => {
     }
   };
 
+  // Return to SLEEPING state and resume background wake word engine
+  const returnToSleepingState = (currentSettings: UserSettings | null) => {
+    clearFollowUpTimer();
+    voiceService.stopListening();
+    voiceService.stopSpeaking();
+    setAssistantState('SLEEPING');
+
+    if (currentSettings?.wakeWordEnabled ?? wakeWordActive) {
+      setTimeout(() => {
+        wakeWordEngine.start(() => {
+          handleWakeWordTriggered(currentSettings);
+        });
+      }, 400);
+    }
+  };
+
   // Start follow-up listening timer before returning to SLEEPING
   const scheduleSleepTimeout = (timeoutSeconds: number = 8) => {
     clearFollowUpTimer();
     followUpTimerRef.current = setTimeout(() => {
       console.log('[Sathi AI] Follow-up window expired. Returning to SLEEPING mode.');
-      voiceService.stopListening();
-      setAssistantState('SLEEPING');
+      returnToSleepingState(settings);
     }, timeoutSeconds * 1000);
   };
 
@@ -103,6 +118,9 @@ export const App: React.FC = () => {
   const handleWakeWordTriggered = (currentSettings: UserSettings | null) => {
     clearFollowUpTimer();
     console.log('[Sathi AI] "Hey Sathi" Wake-Word detected! Waking assistant...');
+
+    // Pause background wake word recognition so VoiceService can take over mic
+    wakeWordEngine.stop();
 
     const isEnglishOnly = currentSettings?.assistantLanguage === 'en';
     const greetingText = isEnglishOnly
@@ -139,7 +157,7 @@ export const App: React.FC = () => {
       (err) => {
         console.warn('Voice error:', err);
         setAssistantState('ERROR');
-        setTimeout(() => setAssistantState('SLEEPING'), 2000);
+        setTimeout(() => returnToSleepingState(currentSettings), 2000);
       },
       currentSettings?.voiceLanguage
     );
